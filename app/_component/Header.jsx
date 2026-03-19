@@ -1,6 +1,7 @@
 'use client'
 
 import { Button } from '@/components/ui/button'
+import { UserButton, useUser } from '@clerk/nextjs'
 import { Plus } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
@@ -9,6 +10,7 @@ import React, { useEffect } from 'react'
 
 function Header() {
     const path = usePathname();
+    const { user, isSignedIn } = useUser();
 
     useEffect(() => {
         console.log(path);
@@ -19,13 +21,20 @@ function Header() {
                 <Image src={'/logo.svg'} alt="Logo" width={150} height={150} />
                 <ul className='hidden md:flex gap-10'>
                     <Link href="/"><li className={`'hover:text-primary font-medium text-sm cursor-pointer' ${path === '/' ? 'text-primary' : ''}`}>For Sale</li></Link>
-                    <Link href={"/for-rent"}><li className={`'hover:text-primary font-medium text-sm cursor-pointer' ${path === '/for-rent' ? 'text-primary' : ''}`}>For Rent</li></Link>
-                    <Link href={"/agent-finder"}><li className={`'hover:text-primary font-medium text-sm cursor-pointer' ${path === '/agent-finder' ? 'text-primary' : ''}`}>Agent Finder</li></Link>
+                    <Link href={"/for-rent"}><li className={`'hover:text-primary font-medium text-sm cursor-pointer' `}>For Rent</li></Link>
+                    <Link href={"/agent-finder"}><li className={`'hover:text-primary font-medium text-sm cursor-pointer' `}>Agent Finder</li></Link>
                 </ul>
             </div>
-            <div className='flex gap-2'>
+            <div className='flex gap-2 item-center'>
                 <Button className='flex gap-2'> <Plus className='h-5 w-5' /> Post your AD</Button>
-                <Button variant="outline"> Login</Button>
+                {
+                    isSignedIn ?
+                        <UserButton />
+                        :
+                        <Link href={'/sign-in'}>
+                            <Button variant="outline"> Login</Button>
+                        </Link>
+                }
             </div>
         </div>
     )
