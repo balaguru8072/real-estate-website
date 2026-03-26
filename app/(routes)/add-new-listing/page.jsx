@@ -8,9 +8,11 @@ import { supabase } from '../../../utils/supabase/client';
 import { useUser } from '@clerk/nextjs';
 import { toast } from 'sonner';
 import { Loader } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 
 function AddNewlisting() {
     const [location, setLocation] = useState(null);
+    const route = useRouter();
     const {user} = useUser();
     const [loader, setLoader] = useState(false);
     const handleSelectAddress = (data) => {
@@ -40,7 +42,9 @@ function AddNewlisting() {
                 setLoader(false);
                 console.log("Data inserted successfully:", data);
                 toast("New Address Added Successfully!.......")
-            }if (error) {
+                route.replace(`/edite-listing/${data[0].id}`); // Navigate to the next page with the new listing ID
+            }
+            if (error) {
                 setLoader(false);
                 console.error("Error inserting data:", error);
                 toast("server side error....")
