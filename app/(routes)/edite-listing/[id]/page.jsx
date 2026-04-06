@@ -1,5 +1,5 @@
 "use client"
-import React, { useEffect, use, useState } from 'react'
+import React, { useEffect, useState, use } from 'react'
 import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { supabase } from '../../../../utils/supabase/client';
@@ -20,11 +20,21 @@ import { useRouter } from 'next/navigation'
 import { toast } from 'sonner';
 import { useUser } from '@clerk/nextjs';
 import FileUploader from '../_component/FileUploader';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 
 function EditListing({ params }) {
-
   const resolvedParams = use(params);
-  const id = resolvedParams.id;
+  const id = resolvedParams?.id;
 
   const { user, isLoaded } = useUser();
   const router = useRouter();
@@ -34,135 +44,156 @@ function EditListing({ params }) {
   const [loader, setLoader] = useState(false);
 
   useEffect(() => {
-    if (!isLoaded) return;
-
-    if (user) {
-      verifyUserRecord();
-    }
-  }, [user, isLoaded]);
+    if (!isLoaded || !user || !id) return;
+    verifyUserRecord();
+  }, [isLoaded, user, id]);
 
   const verifyUserRecord = async () => {
     const { data, error } = await supabase
       .from('listing')
-      .select("*")
+      .select("*, listingImages(listing_id,url)")
       .eq('createdBy', user?.primaryEmailAddress?.emailAddress)
       .eq('id', id);
+
+    if (error) {
+      console.error("Fetch error:", error);
+      toast("Error fetching listing");
+      return;
+    }
 
     if (data && data.length > 0) {
       setListingData(data[0]);
     } else {
-      router.replace('/');
       toast("You are not authorized to edit this listing.");
+      router.replace('/');
     }
   };
 
-  // const onSubmitHandler = async (formValue) => {
-  //   setLoader(true);
-  //   const { data, error } = await supabase
-  //     .from('listing')
-  //     .update(formValue)
-  //     .eq('id', id)
-  //     .select();
-
-  //   if (data) {
-  //     toast("Listing updated successfully!");
-  //   } else {
-  //     console.error(error);
-  //     toast("Error updating listing.");
-  //   }
-
-  //   for (const image of images) {
-  //     const file =image;
-  //     const fileName= Date.now().toString();
-  //     const fileExt =fileName.split('.').pop();
-  //     const {data, error} = await supabase.storage
-  //       .from('listingImages')
-  //       .upload(`${fileName}`, file, {
-  //         contentType: `image/${fileExt}`,
-  //         upsert: false   
-  //       });
-
-  //       if(error){
-  //         console.error("Error uploading image: ", error);
-  //         toast("Error uploading image: " + error.message);
-  //         setLoader(false);
-
-  //       }else{
-  //         toast("Image uploaded successfully!");
-  //         const imageUrl = process.env.NEXT_PUBLIC_IMAGE_URL + fileName;
-  //         console.log(imageUrl)
-  //         const {data, error} = await supabase
-  //         .form('listingImages')
-  //         .insert([
-  //           {
-  //             url: imageUrl,
-  //             listing_id: params?.id
-  //           }
-  //         ])
-  //         .select();
-  //         if(error){
-  //           setLoader(false);
-  //           console.error("Error saving image URL to database: ", error);
-  //           toast("Error saving image URL to database: " + error.message);
-  //         }
-  //         console.log("Image uploaded successfully: ", data);
-
-  //       }
-  //       setLoader(false);
-  //   }
-  // };
-
-  const onSubmitHandler = async (formValue) => {
-    setLoader(true);
-
-    // 1. Update listing data
-    const { error: updateError } = await supabase
-      .from('listing')
-      .update(formValue)
-      .eq('id', id);
-
-    if (updateError) {
-      toast("Error updating listing");
-      setLoader(false);
+  const onSubmitHandler = async (values, publish = false) => {
+  try {
+    if (!id) {
+      toast("Listing ID is missing");
       return;
     }
 
-    // 2. Upload images
-    for (const file of images) {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${Date.now()}.${fileExt}`;
+    setLoader(true);
 
-      const { error: uploadError } = await supabase.storage
-        .from('listingImages')
-        .upload(fileName, file, {
-          contentType: file.type,
-        });
+    const payload = {
+      type: values.type || null,
+      propertytype: values.propertytype || null,
+      bedroom: values.bedroom ? Number(values.bedroom) : null,
+      bathroom: values.bathroom ? Number(values.bathroom) : null,
+      builtln: values.builtln ? Number(values.builtln) : null,
+      parking: values.parking ? Number(values.parking) : null,
+      lotsize: values.lotsize ? Number(values.lotsize) : null,
+      area: values.area ? Number(values.area) : null,
+      price: values.price ? Number(values.price) : null,
+      hoa: values.hoa ? Number(values.hoa) : null,
+      description: values.description || null,
+      profileImage: values.profileImage || null,
+      fullName: values.fullName || null,
+      active: publish ? true : listingData?.active ?? false,
+    };
 
-      if (uploadError) {
-        console.error(uploadError);
-        toast("Image upload failed");
-        continue;
-      }
+    const { data, error } = await supabase
+      .from('listing')
+      .update(payload)
+      .eq('id', id)
+      .select();
 
-      const imageUrl = process.env.NEXT_PUBLIC_IMAGE_URL + fileName;
+    if (error) {
+      console.error("Update error:", error);
+      toast("Update failed: " + error.message);
+      return;
+    }
 
-      const { error: dbError } = await supabase
-        .from('listingImages')
-        .insert([
-          {
-            url: imageUrl,
-            listing_id: id,
-          },
-        ]);
+    if (!data || data.length === 0) {
+      toast("No row updated");
+      return;
+    }
 
-      if (dbError) {
-        console.error(dbError);
-        toast("Saving image failed");
+    if (images && images.length > 0) {
+      for (const file of images) {
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${Date.now()}-${Math.random()
+          .toString(36)
+          .slice(2)}.${fileExt}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('listingImages')
+          .upload(fileName, file, {
+            contentType: file.type,
+            upsert: false,
+          });
+
+        if (uploadError) {
+          console.error("Upload error:", uploadError);
+          toast("Image upload failed");
+          continue;
+        }
+
+        const imageUrl = process.env.NEXT_PUBLIC_IMAGE_URL + fileName;
+
+        const { error: imageInsertError } = await supabase
+          .from('listingImages')
+          .insert([
+            {
+              url: imageUrl,
+              listing_id: id,
+            },
+          ]);
+
+        if (imageInsertError) {
+          console.error("Image insert error:", imageInsertError);
+          toast("Image DB save failed");
+        }
       }
     }
 
+    toast(publish ? "Listing published successfully!" : "Listing saved successfully!");
+
+    if (publish) {
+      router.push('/');
+    } else {
+      await verifyUserRecord();
+    }
+  } catch (error) {
+    console.error("Submit error:", error);
+    toast("Something went wrong");
+  } finally {
     setLoader(false);
-    toast("Listing updated successfully!");
+  }
+};
+
+  const publishBtnHandler = async () => {
+    try {
+      if (!id) {
+        toast("Listing ID is missing");
+        return;
+      }
+
+      setLoader(true);
+
+      const { error } = await supabase
+        .from('listing')
+        .update({ active: true })
+        .eq('id', id)
+        .select();
+
+      if (error) {
+        console.error(error);
+        toast("Error publishing listing");
+        return;
+      }
+
+      toast("Listing published successfully!");
+      await verifyUserRecord();
+    } catch (error) {
+      console.error(error);
+      toast("Something went wrong");
+    } finally {
+      setLoader(false);
+    }
   };
 
   return (
@@ -174,40 +205,32 @@ function EditListing({ params }) {
       <Formik
         enableReinitialize={true}
         initialValues={{
-          type: listingData?.type || "",
-          propertytype: listingData?.propertytype || "",
-          bedroom: listingData?.bedroom || "",
-          bathroom: listingData?.bathroom || "",
-          builtln: listingData?.builtln || "",
-          parking: listingData?.parking || "",
-          lotsize: listingData?.lotsize || "",
-          area: listingData?.area || "",
-          price: listingData?.price || "",
-          hoa: listingData?.hoa || "",
-          description: listingData?.description || "",
-          profileImage: user?.imageUrl,
-          fullName: user?.fullName,
+          type: listingData?.type ?? "",
+          propertytype: listingData?.propertytype ?? "",
+          bedroom: listingData?.bedroom ?? "",
+          bathroom: listingData?.bathroom ?? "",
+          builtln: listingData?.builtln ?? "",
+          parking: listingData?.parking ?? "",
+          lotsize: listingData?.lotsize ?? "",
+          area: listingData?.area ?? "",
+          price: listingData?.price ?? "",
+          hoa: listingData?.hoa ?? "",
+          description: listingData?.description ?? "",
+          profileImage: user?.imageUrl ?? "",
+          fullName: user?.fullName ?? "",
         }}
-        onSubmit={(values) => {
-          onSubmitHandler(values);
-        }}
+        onSubmit={onSubmitHandler}
       >
-        {({
-          values,
-          handleChange,
-          handleSubmit,
-          setFieldValue
-        }) => (
+        {({ values, handleChange, handleSubmit, setFieldValue }) => (
           <form onSubmit={handleSubmit}>
             <div className='p-8 rounded-lg shadow-md mt-5'>
               <div className='grid grid-cols-1 md:grid-cols-3 gap-6'>
 
-                {/* Rent or Sale */}
                 <div className='flex flex-col gap-2'>
                   <h2 className='font-bold text-lg text-slate-500'>Rent or Sale</h2>
                   <RadioGroup
                     value={values.type}
-                    onValueChange={(v) => setFieldValue("type", v)}
+                    onValueChange={(value) => setFieldValue("type", value)}
                   >
                     <div className="flex items-center gap-3">
                       <RadioGroupItem value="Rent" id="Rent" />
@@ -220,12 +243,11 @@ function EditListing({ params }) {
                   </RadioGroup>
                 </div>
 
-                {/* Property Type */}
                 <div className='flex flex-col gap-2'>
                   <h2 className='font-bold text-lg text-slate-500'>Property Type</h2>
                   <Select
                     value={values.propertytype}
-                    onValueChange={(v) => setFieldValue("propertytype", v)}
+                    onValueChange={(value) => setFieldValue("propertytype", value)}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Select property type" />
@@ -242,7 +264,6 @@ function EditListing({ params }) {
 
                 <div></div>
 
-                {/* Row 2 */}
                 <div>
                   <h2 className='font-bold text-gray-500'>Bedroom</h2>
                   <Input type="number" name="bedroom" value={values.bedroom} onChange={handleChange} />
@@ -258,7 +279,6 @@ function EditListing({ params }) {
                   <Input type="number" name="builtln" value={values.builtln} onChange={handleChange} />
                 </div>
 
-                {/* Row 3 */}
                 <div>
                   <h2 className='font-bold text-gray-500'>Parking</h2>
                   <Input type="number" name="parking" value={values.parking} onChange={handleChange} />
@@ -284,28 +304,50 @@ function EditListing({ params }) {
                   <Input type="number" name="hoa" value={values.hoa} onChange={handleChange} />
                 </div>
 
-                {/* Description */}
                 <div className='md:col-span-3'>
                   <h2 className='font-bold text-gray-500'>Description</h2>
                   <Textarea name="description" value={values.description} onChange={handleChange} />
                 </div>
 
-                {/* File Uploader */}
                 <div className='md:col-span-3'>
                   <h2 className='font-bold text-gray-500'>Upload Property Images</h2>
-                  <FileUploader setImages={(value) => setImages(value)} />
+                  <FileUploader
+                    setImages={setImages}
+                    imageList={listingData?.listingImages || []}
+                  />
                 </div>
 
-                {/* Buttons */}
                 <div className='md:col-span-3 flex justify-end gap-4 mt-4'>
-                  <Button className="font-bold" variant="outline" type="submit">
-                    Save
+                  <Button
+                    disabled={loader}
+                    variant="outline"
+                    className="font-bold text-primary border-primary"
+                    type="submit"
+                  >
+                    {loader ? <Loader className='animate-spin' /> : "Save"}
                   </Button>
-                  <Button className="font-bold"
 
-                    type="submit">
-                    {loader ? <Loader /> : "Save & Publish"}
-                  </Button>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button disabled={loader} className="font-bold" type="button">
+                        {loader ? <Loader className='animate-spin' /> : "Save & Publish"}
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Ready to Publish?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Do you really want to publish the listing?
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={publishBtnHandler}>
+                          {loader ? <Loader className='animate-spin' /> : "Yes, Publish"}
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
                 </div>
 
               </div>

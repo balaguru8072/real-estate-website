@@ -1,11 +1,11 @@
-import { Button } from "@/components/ui/button";
 import Image from "next/image";
+import ListingMapView from "./_component/ListingMapView";
 
 export default function Home() {
   return (
-    <div >
-      {/* <h1>balaguru</h1>
-      <Button>click me</Button> */}
+    <div className="px-10 p-10">
+      <ListingMapView  type="Sell"/>
+      
     </div>
   );
 }
